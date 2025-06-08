@@ -13,7 +13,7 @@ from app.database import save_report_to_database
 from app.drive import get_drive_client
 from app.global_date_formats import count_unique_date_formats
 from app.inconsistency import analyze_inconsistency
-from app.load_data import load_hubspot_files
+from app.load_data import load_hubspot_files, write_output_to_drive
 from app.models import FieldModel, GlobalIssue, Report, Severity, Warning, WarningType
 from app.population import analyze_population
 from app.utils import generate_token_from_company_name
@@ -53,31 +53,13 @@ def main(company_name=None):
         return
 
     # Get the company's DataFrame
-    hubspot_df: pd.DataFrame = all_companies[company_name]
+    hubspot_df: pd.DataFrame = all_companies[company_name]["hubspot"]
     print(
         f"✓ Retrieved data for {company_name}: {len(hubspot_df)} records, {len(hubspot_df.columns)} fields"
     )
 
     # Define column configuration
-    column_config = {
-        "critical_columns": {
-            "company_info": {
-                "Website": "Website URL",
-                "LinkedIn": "LinkedIn Company Page",
-                "Industry": "Industry",
-            },
-            "financial_data": {
-                "Annual Revenue": "Annual Revenue",
-                "Funding Stage": "Total Money Raised",
-                "Last Funding Date": "Recent Deal Close Date",
-            },
-            "size_and_structure": {
-                "Employee Count": "Number of Employees",
-                "CEO Name": "Company owner",
-                "Office Locations": "Country/Region",
-            },
-        }
-    }
+    column_config = all_companies[company_name]["config"]
 
     # Pre-generate report id
     report_id = str(uuid.uuid4())
@@ -278,6 +260,12 @@ def main(company_name=None):
         warnings=db_warnings,
         global_issues=global_issues,
     )
+    print("✓ Analysis saved to database")
+
+    # 10. Write output.json to Google Drive
+    print("Writing output to Google Drive...")
+    report_url = f"https://nfs-dq-frontend.onrender.com/reports/{report.token}"
+    write_output_to_drive(drive, company_name, report_url)
     print("✓ Analysis complete!")
 
 
