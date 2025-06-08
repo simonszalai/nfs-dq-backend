@@ -1,9 +1,9 @@
-import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 from uuid import uuid4
 
+from sqlalchemy import TIMESTAMP
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 
@@ -25,22 +25,28 @@ class Severity(str, Enum):
 
 
 class Report(SQLModel, table=True):
-    __tablename__ = "Report"
+    __tablename__ = "Report"  # type: ignore
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    token: str = Field(default_factory=lambda: str(uuid4()), unique=True)
-    company_name: str = Field(alias="companyName")
-    generated_at: datetime = Field(default_factory=datetime.utcnow, alias="generatedAt")
+    token: str = Field(unique=True)
+    company_name: str
+    generated_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True)),
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
 
     # Summary statistics
-    total_records: int = Field(alias="totalRecords")
-    total_fields: int = Field(alias="totalFields")
-    fields_with_issues: int = Field(alias="fieldsWithIssues")
+    total_records: int
+    total_fields: int
+    fields_with_issues: int
 
     # Critical columns configuration
     config: dict = Field(sa_column=Column(JSON))
 
-    created_at: datetime = Field(default_factory=datetime.utcnow, alias="createdAt")
+    created_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True)),
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
 
     # Relationships
     fields: List["FieldModel"] = Relationship(back_populates="report")
@@ -48,17 +54,17 @@ class Report(SQLModel, table=True):
 
 
 class FieldModel(SQLModel, table=True):
-    __tablename__ = "Field"
+    __tablename__ = "Field"  # type: ignore
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     report_id: str = Field(
-        foreign_key="Report.id", alias="reportId"
+        foreign_key="Report.id"
     )  # Changed from "report.id" to "Report.id"
 
-    column_name: str = Field(alias="columnName")
-    populated_count: int = Field(alias="populatedCount")
-    inferred_type: str = Field(alias="inferredType")
-    format_count: Optional[int] = Field(default=None, alias="formatCount")
+    column_name: str
+    populated_count: int
+    inferred_type: str
+    format_count: Optional[int] = Field(default=None)
 
     # Relationships
     report: Report = Relationship(back_populates="fields")
@@ -66,11 +72,11 @@ class FieldModel(SQLModel, table=True):
 
 
 class Warning(SQLModel, table=True):
-    __tablename__ = "Warning"
+    __tablename__ = "Warning"  # type: ignore
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     field_id: str = Field(
-        foreign_key="Field.id", alias="fieldId"
+        foreign_key="Field.id"
     )  # Changed from "field.id" to "Field.id"
 
     type: WarningType
@@ -83,11 +89,11 @@ class Warning(SQLModel, table=True):
 
 
 class GlobalIssue(SQLModel, table=True):
-    __tablename__ = "GlobalIssue"
+    __tablename__ = "GlobalIssue"  # type: ignore
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     report_id: str = Field(
-        foreign_key="Report.id", alias="reportId"
+        foreign_key="Report.id"
     )  # Changed from "report.id" to "Report.id"
 
     type: str

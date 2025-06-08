@@ -1,10 +1,48 @@
 import json
 import os
 import re
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from anthropic import Anthropic
+from anthropic.types.beta import BetaToolParam
+from pydantic import BaseModel
+
+
+class WarningType(str, Enum):
+    """Types of data quality warnings."""
+
+    INCONSISTENT_FORMAT = "INCONSISTENT_FORMAT"
+    DUPLICATE_DATA = "DUPLICATE_DATA"
+    DATA_QUALITY = "DATA_QUALITY"
+    OTHER = "OTHER"
+
+
+class Severity(str, Enum):
+    """Severity levels for data quality issues."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class DataQualityWarning(BaseModel):
+    """Individual data quality warning."""
+
+    type: WarningType
+    message: str
+    severity: Severity
+    affected_count: Optional[int] = None
+    examples: Optional[List[str]] = None
+
+
+class DataQualityResponse(BaseModel):
+    """Response from data quality analysis."""
+
+    column_warnings: Dict[str, List[DataQualityWarning]]
+
 
 # Data quality analysis prompt specifically for HubSpot CRM company data
 DATA_QUALITY_PROMPT = """You are a data quality expert analyzing HubSpot CRM company data for go-to-market teams. 
@@ -56,7 +94,7 @@ For each issue, provide specific examples and assess business impact:
 Provide actionable warnings that demonstrate the value of data cleaning services."""
 
 # Tool definition for data quality analysis
-DATA_QUALITY_TOOL = {
+DATA_QUALITY_TOOL: BetaToolParam = {
     "name": "data_quality_analyzer",
     "description": "Analyze HubSpot CRM company data for quality issues and return warnings",
     "input_schema": {
@@ -240,9 +278,16 @@ class DataQualityAnalyzer:
 
         return patterns
 
+    def _extract_tool_response(self, response) -> Dict[str, Any]:
+        """Extract tool response from Anthropic message."""
+        for content in response.content:
+            if hasattr(content, "type") and content.type == "tool_use":
+                return content.input
+        return {}
+
     def analyze_dataframe(
         self, df: pd.DataFrame, columns: Optional[List[str]] = None
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> DataQualityResponse:
         """Analyze data quality issues across all or specified columns.
 
         Args:
@@ -250,7 +295,7 @@ class DataQualityAnalyzer:
             columns: Specific columns to analyze (None = all columns)
 
         Returns:
-            Dictionary mapping column names to lists of warnings
+            DataQualityResponse object with column warnings
         """
         if columns is None:
             columns = df.columns.tolist()
@@ -296,24 +341,4 @@ Focus on actionable issues that would impact go-to-market operations."""
 
         # Extract warnings from response
         result = self._extract_tool_response(response)
-        return result.get("column_warnings", {})
-
-    def _extract_tool_response(self, response) -> Dict[str, Any]:
-        """Extract tool response from Anthropic message."""
-        for content in response.content:
-            if hasattr(content, "type") and content.type == "tool_use":
-                return content.input
-        return {}
-
-    def analyze_column(self, df: pd.DataFrame, column: str) -> List[Dict[str, Any]]:
-        """Analyze a single column for data quality issues.
-
-        Args:
-            df: DataFrame containing the column
-            column: Column name to analyze
-
-        Returns:
-            List of warnings for the column
-        """
-        result = self.analyze_dataframe(df, [column])
-        return result.get(column, [])
+        return DataQualityResponse(column_warnings=result.get("column_warnings", {}))

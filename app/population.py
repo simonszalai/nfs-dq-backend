@@ -1,7 +1,14 @@
+from typing import Dict
+
 import pandas as pd
+from pydantic import BaseModel
 
 
-def analyze_column_population(df: pd.DataFrame) -> list:
+class ColumnPopulation(BaseModel):
+    populated_count: int
+
+
+def analyze_population(df: pd.DataFrame) -> Dict[str, ColumnPopulation]:
     """
     Analyzes column population in a DataFrame and returns population counts for all columns.
 
@@ -20,7 +27,7 @@ def analyze_column_population(df: pd.DataFrame) -> list:
         return True
 
     fill_counts = df.apply(lambda col: col.apply(is_filled).sum())
-    return [
-        {"column_name": col, "populated_count": int(count)}
-        for col, count in fill_counts.items()
-    ]
+    return {
+        col: ColumnPopulation(populated_count=int(fill_counts[col]))
+        for col in fill_counts.index
+    }

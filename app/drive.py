@@ -23,8 +23,8 @@ def get_drive_client():
     )
 
     # Force Google to give us that refresh-token on the FIRST run
-    gauth.auth_params = {
-        "access_type": "offline",  # <- tells Google “I want a refresh token”
+    gauth.auth_params = {  # type: ignore
+        "access_type": "offline",  # <- tells Google "I want a refresh token"
         "prompt": "consent",  # <- make Google show the consent screen even if already granted
     }
 

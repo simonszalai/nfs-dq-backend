@@ -1,17 +1,30 @@
-[tool.poetry]
+[project]
 name = "dq-backend"
 version = "0.1.0"
 description = "Backend for dq project"
-authors = ["Your Name <your.email@example.com>"]
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
 readme = "README.md"
-packages = [{include = "app"}]
+requires-python = ">=3.9"
+dependencies = [
+    "pydrive2>=1.21.3",
+    "phonenumbers>=9.0.6",
+    "sqlmodel>=0.0.24",
+    "pandas>=2.3.0",
+    "anthropic>=0.52.2",
+    "pydantic>=2.11.5",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-pandas = "^2.3.0"
-
-[tool.poetry.group.dev.dependencies]
+[project.optional-dependencies]
+dev = []
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+dev-dependencies = []

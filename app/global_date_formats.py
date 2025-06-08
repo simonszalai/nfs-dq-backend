@@ -2,18 +2,18 @@ from typing import Dict, Set
 
 import pandas as pd
 
-from app.detect_inconsistent_cols import DATE_FORMATS, _get_date_format
+from app.inconsistency import DATE_FORMATS, ClassifiedColumn, _get_date_format
 
 
 def count_unique_date_formats(
-    classification: Dict[str, Dict[str, str | int]], df: pd.DataFrame
+    classified_columns: Dict[str, ClassifiedColumn], df: pd.DataFrame
 ) -> int:
     """
     Count the total number of unique date formats across all date-classified columns.
 
     Args:
-        classification: Output from classify_columns_by_regex, a nested dictionary
-            {column_name: {"type": str, "format_count": int}}.
+        classified_columns: Output from classify_cols, a dictionary
+            {column_name: ClassifiedColumn}.
         df: The original DataFrame containing the data.
 
     Returns:
@@ -21,7 +21,7 @@ def count_unique_date_formats(
     """
     # Filter for date columns
     date_columns = [
-        col for col, info in classification.items() if info["type"] == "date"
+        col for col, info in classified_columns.items() if info.type == "date"
     ]
 
     if not date_columns:
