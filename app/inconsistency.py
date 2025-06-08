@@ -1,4 +1,5 @@
 import re
+import warnings
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
@@ -173,16 +174,40 @@ def _get_phone_format(s: str) -> str:
 
 
 def _detect_date_format(s: pd.Series) -> Optional[str]:
-    """Robustly detect date format using pandas' inference."""
+    """Robustly detect date format using multiple strategies."""
+    # Try explicit formats first for better control
+    best_format = None
+    best_count = 0
+
+    # Test each format to find the best match
+    for fmt in DATE_FORMATS:
+        try:
+            parsed = pd.to_datetime(s, format=fmt, errors="coerce")
+            valid_count = parsed.notna().sum()
+            if valid_count > best_count:
+                best_count = valid_count
+                best_format = fmt
+        except Exception:
+            continue
+
+    # If explicit formats work well, use them
+    if best_count / len(s) >= 0.5:
+        return best_format
+
+    # Fall back to pandas' automatic parsing with warning suppression
     try:
-        # First try pandas' automatic date parsing
-        parsed = pd.to_datetime(s, errors="coerce", infer_datetime_format=True)
-        valid_mask = parsed.notna()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*Could not infer format.*")
+            warnings.filterwarnings(
+                "ignore", message=".*The argument 'infer_datetime_format'.*"
+            )
+            parsed = pd.to_datetime(s, errors="coerce")
+            valid_mask = parsed.notna()
 
         if valid_mask.sum() / len(s) < 0.5:  # Less than 50% parsed
             return None
 
-        # Sample valid dates to determine format
+        # Sample valid dates to determine format characteristics
         sample_dates = s[valid_mask].head(10)
 
         # Check for consistent separators
@@ -329,8 +354,13 @@ def _detect_series(
     # Check for dates using robust detection
     date_format = _detect_date_format(s)
     if date_format is not None:
-        # Try parsing with inferred format
-        parsed = pd.to_datetime(s, errors="coerce", infer_datetime_format=True)
+        # Try parsing with warning suppression
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*Could not infer format.*")
+            warnings.filterwarnings(
+                "ignore", message=".*The argument 'infer_datetime_format'.*"
+            )
+            parsed = pd.to_datetime(s, errors="coerce")
         if (parsed.notna().sum() / total) >= threshold:
             # Count unique date patterns
             sample_formats = (
@@ -394,8 +424,9 @@ def analyze_inconsistency(
     df: pd.DataFrame, *, threshold: float = 0.8
 ) -> Dict[str, ClassifiedColumn]:
     """
-    Return {column_name: {'type': detected_type, 'format_count': num_formats}} for columns
-    whose non-null values match URLs, emails, phone numbers, or dates in at least `threshold` proportion.
+    Return {column_name: {'type': detected_type, 'format_count': num_formats}} for all columns.
+    Columns whose non-null values match URLs, emails, phone numbers, or dates in at least `threshold` proportion
+    will have their specific type detected. Others default to 'string' type.
     """
     result: Dict[str, ClassifiedColumn] = {}
     for col in df.columns:
@@ -404,4 +435,7 @@ def analyze_inconsistency(
             result[col] = ClassifiedColumn(
                 type=dtype, format_count=format_count if format_count is not None else 1
             )
+        else:
+            # Default fallback for columns that don't match any specific pattern
+            result[col] = ClassifiedColumn(type="string", format_count=1)
     return result
