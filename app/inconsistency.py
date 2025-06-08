@@ -148,7 +148,6 @@ def _get_phone_format(s: str) -> str:
         return "|".join(components)
 
     try:
-        parsed = phonenumbers.parse(s, "US")
         # Use raw string to capture formatting
         components = []
         if s.startswith("+"):
