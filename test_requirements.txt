@@ -1,0 +1,11 @@
+# Testing dependencies for business logic test suite
+pytest>=7.0.0
+pandas>=1.5.0
+pydantic>=1.10.0
+
+# Optional: For enhanced test reporting
+pytest-cov>=4.0.0
+pytest-html>=3.1.0
+
+# Note: These tests focus on business logic only and mock external dependencies
+# No need for anthropic, database drivers, or other external service dependencies
