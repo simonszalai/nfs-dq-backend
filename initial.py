@@ -1,4 +1,3 @@
-import os
 import sys
 import uuid
 from typing import List
@@ -6,17 +5,24 @@ from typing import List
 import pandas as pd
 from dotenv import load_dotenv
 
-from app.anthropic import DataQualityAnalyzer
+from app.anthropic.data_quality_analyzer import DataQualityAnalyzer
 
 # Import all required modules
 from app.database import save_report_to_database
 from app.drive import get_drive_client
-from app.global_date_formats import count_unique_date_formats
 from app.inconsistency import analyze_inconsistency
+from app.initial.global_date_formats import count_unique_date_formats
+from app.initial.models import (
+    FieldModel,
+    GlobalIssue,
+    Report,
+    Severity,
+    Warning,
+    WarningType,
+)
+from app.initial.population import analyze_population
+from app.initial.utils import generate_token_from_company_name
 from app.load_data import load_hubspot_files, write_output_to_drive
-from app.models import FieldModel, GlobalIssue, Report, Severity, Warning, WarningType
-from app.population import analyze_population
-from app.utils import generate_token_from_company_name
 
 SPARSE_THRESHOLD = 0.25
 

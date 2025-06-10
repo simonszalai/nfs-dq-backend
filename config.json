@@ -1,0 +1,19 @@
+{
+  "critical_columns": {
+    "company_info": {
+      "Website": "Website URL",
+      "LinkedIn": "LinkedIn Company Page",
+      "Industry": "Industry"
+    },
+    "financial_data": {
+      "Annual Revenue": "Annual Revenue",
+      "Funding Stage": "Total Money Raised",
+      "Last Funding Date": "Recent Deal Close Date"
+    },
+    "size_and_structure": {
+      "Employee Count": "Number of Employees",
+      "CEO Name": "Company owner",
+      "Office Locations": "Country/Region"
+    }
+  }
+}

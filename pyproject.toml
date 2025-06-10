@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = []
+dev = ["pytest>=8.0.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -29,4 +29,4 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = ["pytest>=8.0.0"]

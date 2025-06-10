@@ -3,8 +3,8 @@ from typing import List
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.models import FieldModel, GlobalIssue, Report, Warning
-from app.utils import generate_token_from_company_name
+from app.initial.models import FieldModel, GlobalIssue, Report, Warning
+from app.initial.utils import generate_token_from_company_name
 
 
 def save_report_to_database(
