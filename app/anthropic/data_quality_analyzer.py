@@ -156,7 +156,7 @@ class DataQualityAnalyzer:
 
         Args:
             api_key: Anthropic API key
-            model: Model to use (default: claude-3-haiku for cost efficiency)
+            model: Model to use (default: claude-sonnet-4-20250514)
         """
         self._client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.model = model

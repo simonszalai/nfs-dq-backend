@@ -124,11 +124,11 @@ COLUMN_MATCHING_TOOL: BetaToolParam = {
 class ColumnMatcher:
     """Matches CRM columns to export columns using Anthropic's Claude."""
 
-    def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, model: str = "claude-sonnet-4-20250514"):
         """Initialize the matcher with Anthropic API credentials.
 
         Args:
-            model: Model to use (default: claude-3-5-sonnet for better reasoning)
+            model: Model to use (default: claude-sonnet-4-20250514 for better reasoning)
         """
         self._client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.model = model
