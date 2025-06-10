@@ -47,7 +47,14 @@ Provide confidence scores:
 - 1.0: Exact match or very high confidence
 - 0.8-0.9: Strong semantic match
 - 0.6-0.7: Likely match but needs verification
-- Below 0.6: Uncertain, needs human review"""
+- Below 0.6: Uncertain, needs human review
+
+CRITICAL: You MUST use the column_matcher tool and provide ALL required fields:
+- mappings: array of mapping objects
+- unmapped_crm_columns: array of CRM column names with no matches
+- unmapped_export_columns: array of export column names with no matches
+
+Even if any of these arrays are empty, you MUST include them in your response."""
 
 
 # Tool definition for column matching
@@ -175,6 +182,9 @@ class ColumnMatcher:
 
         Returns:
             ColumnMatchingResponse with mappings and unmapped columns
+
+        Raises:
+            ValueError: If the AI response cannot be parsed properly
         """
         # Prepare statistics for both sets of columns
         crm_stats = self.prepare_column_stats(df, crm_columns)
@@ -198,7 +208,12 @@ Analyze the column names and statistics to determine the best matches. Consider:
 4. Semantic meaning of field names
 
 For phone number fields, note that 'phone (crm)' might map to 'direct phone (export)'.
-For LinkedIn fields, multiple CRM fields might map to a single export field."""
+For LinkedIn fields, multiple CRM fields might map to a single export field.
+
+IMPORTANT: You MUST use the column_matcher tool with ALL required fields:
+- mappings: List of all CRM columns and their matches (even if export_column is null)
+- unmapped_crm_columns: CRM columns with no export matches (empty array if all match)
+- unmapped_export_columns: Export columns with no CRM matches (empty array if all match)"""
 
         response = self._client.beta.messages.create(
             model=self.model,
@@ -213,6 +228,26 @@ For LinkedIn fields, multiple CRM fields might map to a single export field."""
         # Extract matches from response
         result = self._extract_tool_response(response)
 
+        # Check if we got a valid response
+        if not result:
+            raise ValueError("Failed to extract valid response from AI tool call")
+
+        # Validate required fields are present and provide helpful error messages
+        missing_fields = []
+        if "mappings" not in result:
+            missing_fields.append("mappings")
+        if "unmapped_crm_columns" not in result:
+            missing_fields.append("unmapped_crm_columns")
+        if "unmapped_export_columns" not in result:
+            missing_fields.append("unmapped_export_columns")
+
+        if missing_fields:
+            raise ValueError(
+                f"AI response missing required fields: {missing_fields}. "
+                f"Got fields: {list(result.keys())}. "
+                f"Full response: {result}"
+            )
+
         # Ensure robust data type handling
         mappings = self._ensure_list(result.get("mappings", []))
         unmapped_crm_columns = self._ensure_list(result.get("unmapped_crm_columns", []))
@@ -220,28 +255,103 @@ For LinkedIn fields, multiple CRM fields might map to a single export field."""
             result.get("unmapped_export_columns", [])
         )
 
+        # Convert dictionary mappings to ColumnMapping objects
+        parsed_mappings = []
+        parse_errors = []
+
+        for i, mapping in enumerate(mappings):
+            try:
+                if isinstance(mapping, dict):
+                    parsed_mappings.append(ColumnMapping(**mapping))
+                elif isinstance(mapping, ColumnMapping):
+                    parsed_mappings.append(mapping)
+                else:
+                    # Handle string case by trying to parse as JSON
+                    if isinstance(mapping, str):
+                        try:
+                            mapping_dict = json.loads(mapping)
+                            parsed_mappings.append(ColumnMapping(**mapping_dict))
+                        except json.JSONDecodeError as e:
+                            parse_errors.append(
+                                f"Mapping {i}: Could not parse JSON - {e}"
+                            )
+                            continue
+                    else:
+                        parse_errors.append(
+                            f"Mapping {i}: Unexpected type {type(mapping)}"
+                        )
+                        continue
+            except Exception as e:
+                parse_errors.append(
+                    f"Mapping {i}: Failed to create ColumnMapping - {e}"
+                )
+                continue
+
+        # If we couldn't parse any mappings but we had some, throw an error
+        if len(mappings) > 0 and len(parsed_mappings) == 0:
+            error_msg = (
+                f"Failed to parse any of {len(mappings)} column mappings:\n"
+                + "\n".join(parse_errors)
+            )
+            raise ValueError(error_msg)
+
+        # Log warnings for individual parsing failures
+        if parse_errors:
+            for error in parse_errors:
+                print(f"Warning: {error}")
+
         return ColumnMatchingResponse(
-            mappings=mappings,
+            mappings=parsed_mappings,
             unmapped_crm_columns=unmapped_crm_columns,
             unmapped_export_columns=unmapped_export_columns,
             notes=result.get("notes"),
         )
 
     def _extract_tool_response(self, response) -> Dict[str, Any]:
-        """Extract tool response from Anthropic message."""
+        """Extract tool response from Anthropic message.
+
+        Returns:
+            Dict containing the parsed tool response
+
+        Raises:
+            ValueError: If no valid tool response is found
+        """
+        if not hasattr(response, "content") or not response.content:
+            raise ValueError("No content found in AI response")
+
         for content in response.content:
             if hasattr(content, "type") and content.type == "tool_use":
-                # The input might be a string that needs to be parsed as JSON
+                if not hasattr(content, "input"):
+                    raise ValueError("Tool use content has no input")
+
                 input_data = content.input
+
+                # If it's already a dict, return it directly
+                if isinstance(input_data, dict):
+                    return input_data
+
+                # If it's a string, try to parse it as JSON
                 if isinstance(input_data, str):
                     try:
-                        return json.loads(input_data)
+                        parsed_data = json.loads(input_data)
+                        if isinstance(parsed_data, dict):
+                            return parsed_data
+                        else:
+                            raise ValueError(
+                                f"Parsed JSON is not a dict, got {type(parsed_data)}"
+                            )
                     except json.JSONDecodeError as e:
-                        print(f"Error parsing JSON response: {e}")
-                        print(f"Raw response: {input_data}")
-                        return {}
-                return input_data
-        return {}
+                        # Provide detailed error information
+                        raise ValueError(
+                            f"Failed to parse tool response as JSON: {e}. "
+                            f"Raw response (first 500 chars): {input_data[:500]}"
+                        )
+
+                # Handle any other unexpected types
+                raise ValueError(f"Unexpected input data type: {type(input_data)}")
+
+        # If we get here, no tool_use content was found
+        raise ValueError("No tool_use content found in AI response")
 
     def _ensure_list(self, data: Any) -> List[Any]:
         """Ensure the data is a list, handling both proper lists and JSON strings."""

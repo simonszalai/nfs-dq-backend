@@ -49,10 +49,16 @@ EMAIL_RE = re.compile(
 
 PHONE_RE = re.compile(
     r"""
-    ^(?:\+?\d{1,3})?                  # optional country code
-    (?:[\-\s(]*\d{3}[\-\s)]*)         # area code (required)
-    \d{3}[\-\s]?\d{4}                 # main number (7 digits)
-    (?:\s*(?:\#|x|ext\.?)\s*\d+)?$    # optional extension
+    ^                                  # start of string
+    (?:\+[\d\s\-\.]{1,4})?           # optional country code starting with +
+    [\s\-\.]*                         # optional separators
+    (?:\(?\d{3}\)?)?                 # optional area code with optional parentheses
+    [\s\-\.]*                         # optional separators
+    \d{3,4}                           # first part of number (3-4 digits)
+    [\s\-\.]*                         # optional separators
+    \d{3,4}                           # second part of number (3-4 digits)
+    (?:\s*(?:\#|x|ext\.?)\s*\d+)?    # optional extension
+    $                                  # end of string
     """,
     re.IGNORECASE | re.VERBOSE,
 )
@@ -130,47 +136,46 @@ def _get_url_format(s: str) -> str:
 
 def _get_phone_format(s: str) -> str:
     """Determine the format signature of a phone number."""
-    if phonenumbers is None:
-        # Fallback to basic format detection
-        components = []
-        if s.startswith("+"):
-            components.append("has_country")
-        else:
-            components.append("no_country")
-        if "(" in s and ")" in s:
-            components.append("area_parens")
-        else:
-            components.append("no_parens")
-        separators = [c for c in ["-", ".", " "] if c in s]
-        if separators:
-            components.append(f"sep:{'-'.join(separators)}")
-        else:
-            components.append("sep:none")
-        return "|".join(components)
+    components = []
 
-    try:
-        # Use raw string to capture formatting
-        components = []
-        if s.startswith("+"):
-            components.append("has_country")
-        else:
-            components.append("no_country")
-        if "(" in s and ")" in s:
-            components.append("area_parens")
-        else:
-            components.append("no_parens")
-        separators = [c for c in ["-", ".", " "] if c in s]
-        if separators:
-            components.append(f"sep:{'-'.join(separators)}")
-        else:
-            components.append("sep:none")
-        if any(ext in s.lower() for ext in ["#", "x", "ext"]):
-            components.append("has_ext")
-        else:
-            components.append("no_ext")
-        return "|".join(components)
-    except NumberParseException:
-        return "invalid"
+    # Check for country code
+    if s.startswith("+"):
+        components.append("plus")
+        # Check if there's a space after country code
+        if len(s) > 1 and s[1:].lstrip() != s[1:]:
+            # Find where the country code ends (first non-digit after +)
+            i = 1
+            while i < len(s) and s[i].isdigit():
+                i += 1
+            if i < len(s) and s[i] == " ":
+                components.append("space_after_country")
+
+    # Check for parentheses
+    if "(" in s and ")" in s:
+        components.append("parens")
+
+    # Count separators
+    num_dashes = s.count("-")
+    num_dots = s.count(".")
+    num_spaces = len([c for c in s if c == " "])
+
+    # Add separator info
+    if num_dashes > 0:
+        components.append(f"dash{num_dashes}")
+    if num_dots > 0:
+        components.append(f"dot{num_dots}")
+    if num_spaces > 0:
+        components.append(f"space{num_spaces}")
+
+    # If no separators at all
+    if num_dashes == 0 and num_dots == 0 and num_spaces == 0:
+        components.append("nosep")
+
+    # Check for extensions
+    if any(ext in s.lower() for ext in ["#", "x", "ext"]):
+        components.append("ext")
+
+    return "|".join(components) if components else "plain"
 
 
 def _detect_date_format(s: pd.Series) -> Optional[str]:
@@ -336,7 +341,8 @@ def _detect_series(
         return "email", None
 
     # Check for phone numbers with regex first
-    phone_matches = s.str.match(PHONE_RE.pattern, na=False)
+    # Use direct regex matching instead of pandas str.match for better results
+    phone_matches = s.apply(lambda x: PHONE_RE.match(x) is not None)
     if (phone_matches.sum() / total) >= threshold:
         if phonenumbers:
             # Validate with phonenumbers library

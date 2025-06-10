@@ -12,6 +12,8 @@ class EnrichmentReport(SQLModel, table=True):
     __tablename__ = "EnrichmentReport"  # type: ignore
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    token: str = Field(unique=True)
+    filename: str
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True)),
         default_factory=lambda: datetime.now(timezone.utc),

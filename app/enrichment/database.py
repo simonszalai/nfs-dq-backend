@@ -9,19 +9,22 @@ from app.enrichment.models import (
     ColumnMapping,
     EnrichmentReport,
 )
+from app.initial.utils import generate_token_from_company_name
 
 
 def save_enrichment_report_to_database(
     enrichment_report: EnrichmentReportCalculation,
+    filename: str,
 ) -> None:
     """
     Save an enrichment report and all its related data to the database.
 
     This function is idempotent - it will delete any existing enrichment report
-    with the same ID before saving the new one.
+    with the same filename before saving the new one.
 
     Args:
         enrichment_report: The EnrichmentReportCalculation object to save
+        filename: The filename (e.g., clay_export.csv) to generate token from
     """
     DATABASE_URL = os.getenv("DATABASE_URL")
     if not DATABASE_URL:
@@ -34,14 +37,17 @@ def save_enrichment_report_to_database(
     SQLModel.metadata.create_all(engine)
 
     with Session(engine) as session:
-        # First, check if a report with this ID already exists and delete it
+        # Generate token from filename for idempotent operations
+        token = generate_token_from_company_name(filename)
+
+        # First, check if a report with this token already exists and delete it
         existing_report = session.exec(
-            select(EnrichmentReport).where(EnrichmentReport.id == enrichment_report.id)
+            select(EnrichmentReport).where(EnrichmentReport.token == token)
         ).first()
 
         if existing_report:
             print(
-                f"Found existing enrichment report {enrichment_report.id}, removing old data..."
+                f"Found existing enrichment report for {filename}, removing old data..."
             )
 
             # Delete all comparison stats for column mappings of this report
@@ -58,6 +64,8 @@ def save_enrichment_report_to_database(
         # Create the database enrichment report
         db_report = EnrichmentReport(
             id=enrichment_report.id,
+            token=token,
+            filename=filename,
             created_at=enrichment_report.created_at,
             total_rows=enrichment_report.total_rows,
             total_crm_columns=enrichment_report.total_crm_columns,
@@ -118,5 +126,6 @@ def save_enrichment_report_to_database(
         # Commit all changes
         session.commit()
         print(f"✓ Enrichment analysis saved to database with report ID: {db_report.id}")
+        print(f"✓ Report token: {db_report.token}")
         print(f"✓ Saved {len(db_mappings)} column mappings")
         print(f"✓ Saved {len(db_stats)} comparison statistics")

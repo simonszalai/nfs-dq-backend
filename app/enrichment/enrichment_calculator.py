@@ -10,6 +10,14 @@ from app.enrichment.enrichment_calculation_models import (
 )
 from app.inconsistency import analyze_inconsistency
 
+# Add phone number imports
+try:
+    import phonenumbers
+    from phonenumbers import NumberParseException
+except ImportError:
+    phonenumbers = None
+    NumberParseException = Exception
+
 
 class EnrichmentStatisticsCalculator:
     """Main class for calculating enrichment statistics from column mappings."""
@@ -175,151 +183,96 @@ class EnrichmentStatisticsCalculator:
         # "Correct before" = records that are exactly the same before and after (unchanged)
         stats.correct_values_before = unchanged_records
         # "Correct after" = any non-null value in export column (as per user requirement)
-        stats.correct_values_after = export_data.notna().sum()
+        stats.correct_values_after = int(export_data.notna().sum())
 
         total_rows = len(df)
         if total_rows > 0:
-            stats.correct_percentage_before = (
-                stats.correct_values_before / total_rows
-            ) * 100
-            stats.correct_percentage_after = (
-                stats.correct_values_after / total_rows
-            ) * 100
+            stats.correct_percentage_before = float(
+                (stats.correct_values_before / total_rows) * 100
+            )
+            stats.correct_percentage_after = float(
+                (stats.correct_values_after / total_rows) * 100
+            )
 
         # Get format information - calculate manually for better accuracy
         stats.crm_data_type, stats.crm_format_count = self._calculate_column_formats(
-            crm_data
+            crm_data, is_export_column=False
         )
         stats.export_data_type, stats.export_format_count = (
-            self._calculate_column_formats(export_data)
+            self._calculate_column_formats(export_data, is_export_column=True)
         )
 
         return stats
 
     def _calculate_column_formats(
-        self, column_data: pd.Series
+        self, column_data: pd.Series, is_export_column: bool = False
     ) -> tuple[Optional[str], int]:
-        """Calculate data type and format count for a column manually for better accuracy."""
+        """Calculate data type and format count for a column using the same logic as initial report."""
         # Remove null values and convert to string
         clean_data = column_data.dropna().astype(str).str.strip()
 
         if clean_data.empty:
             return None, 1
 
-        # Use existing inconsistency analysis for basic type detection
-        from app.inconsistency import analyze_inconsistency
+        # Only apply phone number validation for export columns
+        if is_export_column and self._is_phone_column_with_valid_numbers(clean_data):
+            return "phone", 1
 
-        temp_df = pd.DataFrame({column_data.name or "temp": column_data})
+        col_name = str(column_data.name) if column_data.name is not None else "temp"
+
+        # Use the same inconsistency analysis as the initial report
+        temp_df = pd.DataFrame({col_name: column_data})
         format_analysis = analyze_inconsistency(temp_df)
 
-        col_name = column_data.name or "temp"
         if col_name in format_analysis:
-            detected_type = format_analysis[col_name].type
-
-            # For certain types, manually count unique formats for better accuracy
-            if detected_type == "phone":
-                unique_formats = self._count_phone_formats(clean_data)
-                return detected_type, unique_formats
-            elif detected_type == "date":
-                unique_formats = self._count_date_formats(clean_data)
-                return detected_type, unique_formats
-            elif detected_type in ["url", "email"]:
-                # For URLs and emails, count unique patterns
-                unique_patterns = len(clean_data.unique())
-                # Cap at reasonable number to avoid too many "formats"
-                return detected_type, min(unique_patterns, 10)
-            else:
-                # For other types, use the original analysis
-                return detected_type, format_analysis[col_name].format_count
+            # Use exactly what analyze_inconsistency returns
+            return format_analysis[col_name].type, format_analysis[
+                col_name
+            ].format_count
 
         return "string", 1
 
-    def _count_phone_formats(self, phone_data: pd.Series) -> int:
-        """Count unique phone number formats more accurately."""
-        format_patterns = set()
+    def _is_phone_column_with_valid_numbers(self, clean_data: pd.Series) -> bool:
+        """Check if column contains phone numbers and if all are valid according to their country codes."""
+        if phonenumbers is None or clean_data.empty:
+            return False
 
-        for phone in phone_data:
-            if pd.isna(phone) or str(phone).strip() == "":
-                continue
+        # Basic phone number pattern check first (to avoid expensive validation on non-phone data)
+        import re
 
-            phone_str = str(phone).strip()
+        phone_pattern = re.compile(r"[\+]?[1-9]?[\d\s\-\(\)\.]{7,20}")
+        potential_phones = clean_data.apply(lambda x: bool(phone_pattern.match(str(x))))
 
-            # Create a format signature based on structure
-            format_signature = []
+        # If less than 80% look like phone numbers, not a phone column
+        if potential_phones.sum() / len(clean_data) < 0.8:
+            return False
 
-            # Check for country code
-            if phone_str.startswith("+"):
-                format_signature.append("country_code")
-            elif phone_str.startswith("00"):
-                format_signature.append("intl_prefix")
-            else:
-                format_signature.append("domestic")
+        # Now validate each potential phone number
+        valid_count = 0
+        total_count = len(clean_data)
 
-            # Check for parentheses around area code
-            if "(" in phone_str and ")" in phone_str:
-                format_signature.append("area_parens")
-            else:
-                format_signature.append("no_parens")
+        for phone_str in clean_data:
+            if self._is_valid_phone_number(phone_str):
+                valid_count += 1
 
-            # Check for separators
-            separators = []
-            if "-" in phone_str:
-                separators.append("dash")
-            if "." in phone_str:
-                separators.append("dot")
-            if " " in phone_str:
-                separators.append("space")
+        # If at least 80% are valid phone numbers, treat as phone column with unified format
+        return (valid_count / total_count) >= 0.8
 
-            if separators:
-                format_signature.append(f"sep_{'_'.join(separators)}")
-            else:
-                format_signature.append("no_sep")
+    def _is_valid_phone_number(self, s: str, region: str = "US") -> bool:
+        """Check if a string is a valid phone number using phonenumbers library."""
+        if phonenumbers is None:
+            return False
+        try:
+            # Try parsing without region first (for international numbers)
+            try:
+                parsed = phonenumbers.parse(s, None)
+            except Exception:
+                # Fall back to parsing with default region
+                parsed = phonenumbers.parse(s, region)
 
-            # Check for extensions
-            if any(ext in phone_str.lower() for ext in ["ext", "x", "#"]):
-                format_signature.append("has_ext")
+            return phonenumbers.is_valid_number(parsed)
+        except Exception:
+            return False
 
-            format_patterns.add("|".join(format_signature))
-
-        return max(1, len(format_patterns))
-
-    def _count_date_formats(self, date_data: pd.Series) -> int:
-        """Count unique date formats more accurately."""
-        format_patterns = set()
-
-        for date_val in date_data:
-            if pd.isna(date_val) or str(date_val).strip() == "":
-                continue
-
-            date_str = str(date_val).strip()
-
-            # Create format signature based on separators and structure
-            format_signature = []
-
-            # Check separators
-            if "/" in date_str:
-                format_signature.append("slash_sep")
-            elif "-" in date_str:
-                format_signature.append("dash_sep")
-            elif "." in date_str:
-                format_signature.append("dot_sep")
-            else:
-                format_signature.append("no_sep")
-
-            # Check if has time component
-            if ":" in date_str:
-                format_signature.append("has_time")
-            else:
-                format_signature.append("date_only")
-
-            # Check for timezone
-            if (
-                date_str.endswith("Z")
-                or "+" in date_str[-6:]
-                or date_str.count("-") > 2
-            ):
-                format_signature.append("has_tz")
-
-            format_patterns.add("|".join(format_signature))
-
-        return max(1, len(format_patterns))
+    # Remove the custom format counting methods since we'll use analyze_inconsistency
+    # which already handles format counting correctly

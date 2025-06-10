@@ -97,17 +97,18 @@ def print_enrichment_report(enrichment_report):
     )
 
 
-def save_enrichment_to_database(enrichment_report):
+def save_enrichment_to_database(enrichment_report, filename):
     """
     Save enrichment report to database.
 
     Args:
         enrichment_report: EnrichmentReportCalculation object with all the statistics
+        filename: The filename to generate token from for idempotent saving
     """
     from app.enrichment.database import save_enrichment_report_to_database
 
     try:
-        save_enrichment_report_to_database(enrichment_report)
+        save_enrichment_report_to_database(enrichment_report, filename)
         print(
             f"✓ Enrichment analysis completed for {enrichment_report.total_rows} rows"
         )
@@ -207,7 +208,7 @@ def main(clay_export_filename="clay_export.csv"):
     # Step 6: Save results to database
     print("Saving enrichment results...")
     try:
-        save_enrichment_to_database(enrichment_report)
+        save_enrichment_to_database(enrichment_report, clay_export_filename)
     except Exception as e:
         print(f"Error saving to database: {e}")
         import traceback
