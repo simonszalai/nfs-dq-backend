@@ -132,3 +132,85 @@ The main components are located in the `app/` directory:
 - `date_formats_across_cols.py`: Date format analysis
 - `save_to_db.py`: Database persistence
 - `models.py`: Database models
+
+## Batch Report Processing
+
+The main orchestrator (`main.py`) provides automated batch processing of data quality reports across multiple company folders.
+
+### Features
+
+- **Automated Discovery**: Lists all folders in a root Google Drive folder
+- **File Detection**: Searches for HubSpot CSV, Clay CSV, and config.json files in each folder
+- **Database Checking**: Verifies if reports already exist to avoid unnecessary reprocessing
+- **Override Support**: Force recalculation of specific reports regardless of existing status
+- **Parallel Processing**: Processes multiple reports simultaneously using ThreadPoolExecutor
+- **Comprehensive Logging**: Detailed progress tracking and error reporting
+
+### Usage
+
+```python
+from main import main
+
+# Basic usage - process all missing reports
+main()
+
+# With overrides - force recalculate specific reports
+main(
+    initial_override=["company1", "company2"],  # Force initial reports
+    enrichment_override=["company3"],           # Force enrichment reports
+    root_folder_id="your_custom_root_folder_id"
+)
+```
+
+### Environment Variables
+
+- `ROOT_FOLDER_ID`: Google Drive folder ID containing company report folders (optional)
+- `DATABASE_URL`: Database connection string for storing reports
+
+### File Structure Expected
+
+```
+Root Folder/
+├── Company1/
+│   ├── hubspot_export.csv    # Contains "hubspot" in filename
+│   ├── clay_export.csv       # Contains "clay" in filename
+│   └── config.json           # Optional configuration
+├── Company2/
+│   ├── hubspot_data.csv
+│   └── clay_enrichment.csv
+└── Company3/
+    └── hubspot_file.csv
+```
+
+### Processing Logic
+
+1. **Discovery**: Lists all folders in the root directory
+2. **File Search**: Searches each folder for:
+   - CSV files containing "hubspot" (case-insensitive) → Initial reports
+   - CSV files containing "clay" (case-insensitive) → Enrichment reports
+   - config.json files → Configuration for initial reports
+3. **Database Check**: Verifies existing reports using folder name hash tokens
+4. **Processing Decision**: Processes reports that are:
+   - Missing from database, OR
+   - Listed in override parameters
+5. **Parallel Execution**: Runs all processing tasks concurrently
+6. **Summary Report**: Provides detailed results of all processing attempts
+
+### Individual Report Processing
+
+You can still run individual reports:
+
+```bash
+# Initial report only
+python initial.py
+
+# Enrichment report only
+python enrichment.py
+```
+
+## API Endpoints
+
+The individual modules have been enhanced to work with both global search and specific file objects:
+
+- `initial.main(company_name, hubspot_file=None, config_file=None)`
+- `enrichment.enrich(clay_export_filename, clay_file=None)`

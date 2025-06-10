@@ -61,3 +61,78 @@ def get_drive_client():
     print("Google Drive client ready.")
 
     return drive
+
+
+def list_folders_in_root(drive, root_folder_id):
+    """
+    List all folder names in the specified root folder.
+
+    Args:
+        drive: Google Drive client
+        root_folder_id: ID of the root folder to search in
+
+    Returns:
+        List of folder names (report names)
+    """
+    subfolder_q = (
+        f"'{root_folder_id}' in parents "
+        "and mimeType='application/vnd.google-apps.folder' "
+        "and trashed=false"
+    )
+
+    folders = []
+    for folder in drive.ListFile({"q": subfolder_q}).GetList():
+        folders.append(folder["title"])
+
+    return folders
+
+
+def find_files_in_folder(drive, folder_name, root_folder_id):
+    """
+    Find specific files (hubspot CSV, clay CSV, config.json) in a folder.
+
+    Args:
+        drive: Google Drive client
+        folder_name: Name of the folder to search in
+        root_folder_id: ID of the root folder containing the target folder
+
+    Returns:
+        Dict with 'hubspot_file', 'clay_file', 'config_file' keys containing file objects or None
+    """
+    # First find the folder ID
+    subfolder_q = (
+        f"'{root_folder_id}' in parents "
+        "and mimeType='application/vnd.google-apps.folder' "
+        "and trashed=false"
+    )
+
+    folder_id = None
+    for folder in drive.ListFile({"q": subfolder_q}).GetList():
+        if folder["title"] == folder_name:
+            folder_id = folder["id"]
+            break
+
+    if not folder_id:
+        return {"hubspot_file": None, "clay_file": None, "config_file": None}
+
+    # Search for files in the folder
+    files_q = f"'{folder_id}' in parents and trashed=false"
+
+    result = {"hubspot_file": None, "clay_file": None, "config_file": None}
+
+    for file in drive.ListFile({"q": files_q}).GetList():
+        filename_lower = file["title"].lower()
+
+        # Look for hubspot CSV
+        if "hubspot" in filename_lower and filename_lower.endswith(".csv"):
+            result["hubspot_file"] = file
+
+        # Look for clay CSV
+        elif "clay" in filename_lower and filename_lower.endswith(".csv"):
+            result["clay_file"] = file
+
+        # Look for config.json
+        elif filename_lower == "config.json":
+            result["config_file"] = file
+
+    return result

@@ -14,7 +14,6 @@ from app.inconsistency import (
     _detect_date_format,
     _detect_series,
     _get_boolean_format,
-    _get_date_format,
     _get_float_format,
     _get_integer_format,
     _get_phone_format,

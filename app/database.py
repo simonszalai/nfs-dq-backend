@@ -3,8 +3,48 @@ from typing import List
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.enrichment.models import EnrichmentReport
 from app.initial.models import FieldModel, GlobalIssue, Report, Warning
 from app.initial.utils import generate_token_from_company_name
+
+
+def check_reports_exist(folder_name: str) -> dict:
+    """
+    Check if initial and enrichment reports already exist for a given folder name.
+
+    Args:
+        folder_name: Name of the folder (report name) to check
+
+    Returns:
+        Dict with 'initial_exists' and 'enrichment_exists' boolean values
+    """
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        print("Warning: DATABASE_URL not set. Cannot check existing reports.")
+        return {"initial_exists": False, "enrichment_exists": False}
+
+    engine = create_engine(DATABASE_URL)
+
+    # Create tables if they don't exist
+    SQLModel.metadata.create_all(engine)
+
+    token = generate_token_from_company_name(folder_name)
+
+    with Session(engine) as session:
+        # Check for initial report
+        initial_report = session.exec(
+            select(Report).where(Report.token == token)
+        ).first()
+
+        # Check for enrichment report
+        enrichment_report = session.exec(
+            select(EnrichmentReport).where(EnrichmentReport.token == token)
+        ).first()
+
+        return {
+            "initial_exists": initial_report is not None,
+            "enrichment_exists": enrichment_report is not None,
+        }
 
 
 def save_report_to_database(

@@ -1,5 +1,7 @@
+import json
 import sys
 import uuid
+from io import StringIO
 from typing import List
 
 import pandas as pd
@@ -9,7 +11,7 @@ from app.anthropic.data_quality_analyzer import DataQualityAnalyzer
 
 # Import all required modules
 from app.database import save_report_to_database
-from app.drive import get_drive_client
+from app.drive import find_files_in_folder, get_drive_client
 from app.inconsistency import analyze_inconsistency
 from app.initial.global_date_formats import count_unique_date_formats
 from app.initial.models import (
@@ -22,50 +24,58 @@ from app.initial.models import (
 )
 from app.initial.population import analyze_population
 from app.initial.utils import generate_token_from_company_name
-from app.load_data import load_hubspot_files, write_output_to_drive
+from app.load_data import write_output_to_drive
 
 SPARSE_THRESHOLD = 0.25
+MASTER_FOLDER_ID = "1ew2-2rkPnYn29KMyTdWYVlE6o40AOMz9"
 
 load_dotenv(override=True)
 
 
-def main(company_name=None):
+def process_initial_report(company_name: str):
     """
-    Main function to analyze HubSpot data quality for a given company.
+    Process initial data quality report for a given company.
 
     Args:
-        company_name: Name of the company to analyze. If None, defaults to 'nofluffselling'
+        company_name: Name of the company folder to analyze
     """
-    # Default company name if not provided
-    if company_name is None:
-        company_name = "nofluffselling"
-
-    print(f"Starting analysis for company: {company_name}")
+    print(f"Starting initial analysis for company: {company_name}")
 
     # Step 1: Connect to Google Drive
     print("Connecting to Google Drive...")
     drive = get_drive_client()
     print("✓ Connected to Google Drive")
 
-    # Step 2: Load HubSpot files
-    print("Loading HubSpot files...")
-    all_companies = load_hubspot_files(drive)
-    print(f"✓ Loaded {len(all_companies)} companies from HubSpot")
+    # Step 2: Find required files in the company folder
+    print(f"Finding files in {company_name} folder...")
+    files = find_files_in_folder(drive, company_name, MASTER_FOLDER_ID)
 
-    # Check if company exists
-    if company_name not in all_companies:
-        print(f"Error: Company '{company_name}' not found in the loaded data.")
-        print(f"Available companies: {list(all_companies.keys())}")
-        return
+    hubspot_file = files.get("hubspot_file")
+    config_file = files.get("config_file")
 
-    # Get the company's DataFrame
-    hubspot_df: pd.DataFrame = all_companies[company_name]["hubspot"]
+    if hubspot_file is None:
+        raise FileNotFoundError(f"No HubSpot CSV file found in {company_name} folder")
+
+    print(f"✓ Found HubSpot file: {hubspot_file['title']}")
+    if config_file:
+        print(f"✓ Found config file: {config_file['title']}")
+    else:
+        print("No config file found, using empty config")
+
+    # Step 3: Load HubSpot data
+    print("Loading HubSpot file...")
+    csv_str = hubspot_file.GetContentString(mimetype="text/csv")
+    hubspot_df = pd.read_csv(StringIO(csv_str))
     print(
-        f"✓ Retrieved data for {company_name}: {len(hubspot_df)} records, {len(hubspot_df.columns)} fields"
+        f"✓ Loaded HubSpot data: {len(hubspot_df)} records, {len(hubspot_df.columns)} fields"
     )
 
-    # Define column configuration
-    column_config = all_companies[company_name]["config"]
+    # Step 4: Load config if available
+    if config_file is not None:
+        config_str = config_file.GetContentString()
+        column_config = json.loads(config_str)
+    else:
+        column_config = {}
 
     # Pre-generate report id
     report_id = str(uuid.uuid4())
@@ -272,13 +282,13 @@ def main(company_name=None):
     print("Writing output to Google Drive...")
     report_url = f"https://nfs-dq-frontend.onrender.com/reports/{report.token}"
     write_output_to_drive(drive, company_name, report_url)
-    print("✓ Analysis complete!")
+    print("✓ Initial analysis complete!")
 
 
 if __name__ == "__main__":
     try:
-        # Run main function
-        main()
+        # Run function with default company name
+        process_initial_report("nofluffselling")
     except KeyboardInterrupt:
         print("\nAnalysis interrupted by user")
         sys.exit(1)

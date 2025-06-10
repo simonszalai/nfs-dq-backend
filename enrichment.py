@@ -1,43 +1,16 @@
 import sys
 from io import StringIO
-from typing import List
 
 import pandas as pd
 from dotenv import load_dotenv
 
 from app.anthropic.column_matcher import ColumnMatcher
-from app.drive import get_drive_client
+from app.drive import find_files_in_folder, get_drive_client
 from app.enrichment.enrichment_calculator import EnrichmentStatisticsCalculator
 
+MASTER_FOLDER_ID = "1ew2-2rkPnYn29KMyTdWYVlE6o40AOMz9"
+
 load_dotenv(override=True)
-
-
-def load_clay_export_from_drive(drive, filename="clay_export.csv"):
-    """
-    Load the clay_export.csv file from Google Drive.
-
-    Args:
-        drive: Google Drive client
-        filename: Name of the CSV file to load
-
-    Returns:
-        pd.DataFrame: The loaded clay export data
-    """
-    # Search for the clay_export.csv file
-    file_list = drive.ListFile({"q": f"title='{filename}' and trashed=false"}).GetList()
-
-    if not file_list:
-        raise FileNotFoundError(
-            f"Clay export file '{filename}' not found in Google Drive"
-        )
-
-    if len(file_list) > 1:
-        print(f"Warning: Multiple files named '{filename}' found. Using the first one.")
-
-    # Load the first matching file
-    clay_file = file_list[0]
-    csv_str = clay_file.GetContentString(mimetype="text/csv")
-    return pd.read_csv(StringIO(csv_str))
 
 
 def print_enrichment_report(enrichment_report):
@@ -122,33 +95,38 @@ def save_enrichment_to_database(enrichment_report, filename):
         raise
 
 
-def enrich(clay_export_filename="clay_export.csv"):
+def process_enrichment_report(folder_name: str):
     """
-    Main function to analyze enrichment statistics for Clay export data.
+    Process enrichment report for Clay export data in a specific folder.
 
     Args:
-        clay_export_filename: Name of the Clay export CSV file in Google Drive
+        folder_name: Name of the folder containing Clay export data
     """
-    print("Starting enrichment analysis...")
+    print(f"Starting enrichment analysis for folder: {folder_name}")
 
     # Step 1: Connect to Google Drive
     print("Connecting to Google Drive...")
     drive = get_drive_client()
     print("✓ Connected to Google Drive")
 
-    # Step 2: Load Clay export CSV
-    print(f"Loading {clay_export_filename} from Google Drive...")
-    try:
-        df = load_clay_export_from_drive(drive, clay_export_filename)
-        print(f"✓ Loaded Clay export data: {len(df)} rows, {len(df.columns)} columns")
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        return
-    except Exception as e:
-        print(f"Error loading file: {e}")
-        return
+    # Step 2: Find Clay export CSV in the folder
+    print(f"Finding Clay export file in {folder_name} folder...")
+    files = find_files_in_folder(drive, folder_name, MASTER_FOLDER_ID)
 
-    # Step 3: Extract CRM and Export columns
+    clay_file = files.get("clay_file")
+
+    if clay_file is None:
+        raise FileNotFoundError(f"No Clay CSV file found in {folder_name} folder")
+
+    print(f"✓ Found Clay file: {clay_file['title']}")
+
+    # Step 3: Load Clay export CSV
+    print("Loading Clay export file...")
+    csv_str = clay_file.GetContentString(mimetype="text/csv")
+    df = pd.read_csv(StringIO(csv_str))
+    print(f"✓ Loaded Clay export data: {len(df)} rows, {len(df.columns)} columns")
+
+    # Step 4: Extract CRM and Export columns
     print("Extracting CRM and export columns...")
     all_columns = df.columns.tolist()
 
@@ -157,18 +135,16 @@ def enrich(clay_export_filename="clay_export.csv"):
     export_columns = [col for col in all_columns if "(export)" in col.lower()]
 
     if not crm_columns:
-        print("Error: No CRM columns found (columns ending with '(crm)')")
-        return
+        raise ValueError("No CRM columns found (columns containing '(crm)')")
 
     if not export_columns:
-        print("Error: No export columns found (columns ending with '(export)')")
-        return
+        raise ValueError("No export columns found (columns containing '(export)')")
 
     print(
         f"✓ Found {len(crm_columns)} CRM columns and {len(export_columns)} export columns"
     )
 
-    # Step 4: Match columns using ColumnMatcher
+    # Step 5: Match columns using ColumnMatcher
     print("Matching CRM and export columns...")
     try:
         matcher = ColumnMatcher()
@@ -184,9 +160,9 @@ def enrich(clay_export_filename="clay_export.csv"):
         import traceback
 
         traceback.print_exc()
-        return
+        raise
 
-    # Step 5: Calculate enrichment statistics
+    # Step 6: Calculate enrichment statistics
     print("Calculating enrichment statistics...")
     try:
         calculator = EnrichmentStatisticsCalculator()
@@ -203,20 +179,20 @@ def enrich(clay_export_filename="clay_export.csv"):
         import traceback
 
         traceback.print_exc()
-        return
+        raise
 
-    # Step 6: Save results to database
+    # Step 7: Save results to database
     print("Saving enrichment results...")
     try:
-        save_enrichment_to_database(enrichment_report, clay_export_filename)
+        save_enrichment_to_database(enrichment_report, folder_name)
     except Exception as e:
         print(f"Error saving to database: {e}")
         import traceback
 
         traceback.print_exc()
-        return
+        raise
 
-    # Step 7: Print detailed enrichment report
+    # Step 8: Print detailed enrichment report
     print_enrichment_report(enrichment_report)
 
     print("✓ Enrichment analysis complete!")
@@ -234,8 +210,8 @@ def enrich(clay_export_filename="clay_export.csv"):
 
 if __name__ == "__main__":
     try:
-        # Run main function
-        enrich()
+        # Run function with default folder name
+        process_enrichment_report("nofluffselling")
     except KeyboardInterrupt:
         print("\nEnrichment analysis interrupted by user")
         sys.exit(1)

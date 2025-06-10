@@ -28,5 +28,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
+[tool.ruff]
+ignore = ["F541"]
+
 [tool.uv]
 dev-dependencies = ["pytest>=8.0.0"]

@@ -1,4 +1,3 @@
-from typing import List, Optional
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -6,7 +5,6 @@ import pytest
 
 from app.anthropic.column_matcher import ColumnMapping, ColumnMatchingResponse
 from app.enrichment.enrichment_calculation_models import (
-    ColumnComparisonStatsCalculation,
     ColumnMappingCalculation,
     EnrichmentReportCalculation,
 )

@@ -112,3 +112,66 @@ def write_output_to_drive(
         output_file.SetContentString(json.dumps(output_data, indent=2))
         output_file.Upload()
         print(f"✓ Created output.json in {company_name} folder")
+
+
+def write_enrichment_output_to_drive(
+    drive, enrichment_filename, report_url, master_folder_id=MASTER_FOLDER_ID
+):
+    """
+    Write output.json file to the enrichment file's Google Drive folder with the report URL.
+
+    Args:
+        drive: Google Drive client
+        enrichment_filename: Name of the enrichment file (e.g., clay_export.csv)
+        report_url: URL of the generated enrichment report
+        master_folder_id: ID of the master folder containing files
+    """
+    # Search for the enrichment file to determine its parent folder
+    search_query = f"title='{enrichment_filename}' and trashed=false"
+    files = drive.ListFile({"q": search_query}).GetList()
+
+    if not files:
+        raise ValueError(
+            f"Enrichment file '{enrichment_filename}' not found in Google Drive"
+        )
+
+    # Get the first file's parent folder
+    enrichment_file = files[0]
+    parent_folders = enrichment_file["parents"]
+
+    if not parent_folders:
+        raise ValueError(
+            f"Enrichment file '{enrichment_filename}' has no parent folder"
+        )
+
+    folder_id = parent_folders[0]["id"]
+
+    # Create output data
+    output_data = {"report_url": report_url}
+
+    # Check if output.json already exists in the folder
+    files_q = f"'{folder_id}' in parents and trashed=false"
+    existing_output_file = None
+    for f in drive.ListFile({"q": files_q}).GetList():
+        if f["title"].lower() == "output.json":
+            existing_output_file = f
+            break
+
+    # Create or update the output.json file
+    if existing_output_file:
+        # Update existing file
+        existing_output_file.SetContentString(json.dumps(output_data, indent=2))
+        existing_output_file.Upload()
+        print(f"✓ Updated existing output.json for {enrichment_filename}")
+    else:
+        # Create new file
+        output_file = drive.CreateFile(
+            {
+                "title": "output.json",
+                "parents": [{"id": folder_id}],
+                "mimeType": "application/json",
+            }
+        )
+        output_file.SetContentString(json.dumps(output_data, indent=2))
+        output_file.Upload()
+        print(f"✓ Created output.json for {enrichment_filename}")
