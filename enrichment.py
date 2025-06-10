@@ -202,7 +202,7 @@ def process_enrichment_report(folder_name: str):
     # Step 8: Write output.json to Google Drive
     print("Writing output to Google Drive...")
     try:
-        report_url = f"https://nfs-dq-frontend.onrender.com/enrichments/{token}"
+        report_url = f"https://nfs-dq-frontend.onrender.com/enhancements/{token}"
         write_enrichment_output_to_drive(drive, clay_file["title"], report_url)
     except Exception as e:
         print(f"Error writing output to Google Drive: {e}")
