@@ -122,7 +122,7 @@ def save_enrichment_to_database(enrichment_report, filename):
         raise
 
 
-def main(clay_export_filename="clay_export.csv"):
+def enrich(clay_export_filename="clay_export.csv"):
     """
     Main function to analyze enrichment statistics for Clay export data.
 
@@ -235,7 +235,7 @@ def main(clay_export_filename="clay_export.csv"):
 if __name__ == "__main__":
     try:
         # Run main function
-        main()
+        enrich()
     except KeyboardInterrupt:
         print("\nEnrichment analysis interrupted by user")
         sys.exit(1)
