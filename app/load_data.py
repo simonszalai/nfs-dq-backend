@@ -114,11 +114,9 @@ def write_output_to_drive(
         print(f"✓ Created output.json in {company_name} folder")
 
 
-def write_enrichment_output_to_drive(
-    drive, enrichment_filename, report_url, master_folder_id=MASTER_FOLDER_ID
-):
+def write_enrichment_output_to_drive(drive, enrichment_filename, report_url):
     """
-    Write output.json file to the enrichment file's Google Drive folder with the report URL.
+    Write enrichment_output.json file to the enrichment file's Google Drive folder with the report URL.
 
     Args:
         drive: Google Drive client
@@ -149,29 +147,29 @@ def write_enrichment_output_to_drive(
     # Create output data
     output_data = {"report_url": report_url}
 
-    # Check if output.json already exists in the folder
+    # Check if enrichment_output.json already exists in the folder
     files_q = f"'{folder_id}' in parents and trashed=false"
     existing_output_file = None
     for f in drive.ListFile({"q": files_q}).GetList():
-        if f["title"].lower() == "output.json":
+        if f["title"].lower() == "enrichment_output.json":
             existing_output_file = f
             break
 
-    # Create or update the output.json file
+    # Create or update the enrichment_output.json file
     if existing_output_file:
         # Update existing file
         existing_output_file.SetContentString(json.dumps(output_data, indent=2))
         existing_output_file.Upload()
-        print(f"✓ Updated existing output.json for {enrichment_filename}")
+        print(f"✓ Updated existing enrichment_output.json for {enrichment_filename}")
     else:
         # Create new file
         output_file = drive.CreateFile(
             {
-                "title": "output.json",
+                "title": "enrichment_output.json",
                 "parents": [{"id": folder_id}],
                 "mimeType": "application/json",
             }
         )
         output_file.SetContentString(json.dumps(output_data, indent=2))
         output_file.Upload()
-        print(f"✓ Created output.json for {enrichment_filename}")
+        print(f"✓ Created enrichment_output.json for {enrichment_filename}")

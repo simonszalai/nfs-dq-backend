@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from app.anthropic.column_matcher import ColumnMatcher
 from app.drive import find_files_in_folder, get_drive_client
 from app.enrichment.enrichment_calculator import EnrichmentStatisticsCalculator
+from app.load_data import write_enrichment_output_to_drive
 
 MASTER_FOLDER_ID = "1ew2-2rkPnYn29KMyTdWYVlE6o40AOMz9"
 
@@ -77,16 +78,22 @@ def save_enrichment_to_database(enrichment_report, filename):
     Args:
         enrichment_report: EnrichmentReportCalculation object with all the statistics
         filename: The filename to generate token from for idempotent saving
+
+    Returns:
+        str: The token generated for the enrichment report
     """
     from app.enrichment.database import save_enrichment_report_to_database
+    from app.initial.utils import generate_token_from_company_name
 
     try:
         save_enrichment_report_to_database(enrichment_report, filename)
+        token = generate_token_from_company_name(filename)
         print(
             f"✓ Enrichment analysis completed for {enrichment_report.total_rows} rows"
         )
         print(f"✓ Found {len(enrichment_report.column_mappings)} column mappings")
         print(f"✓ Records modified: {enrichment_report.records_modified_count}")
+        return token
     except Exception as e:
         print(f"Error saving enrichment report to database: {e}")
         import traceback
@@ -184,7 +191,7 @@ def process_enrichment_report(folder_name: str):
     # Step 7: Save results to database
     print("Saving enrichment results...")
     try:
-        save_enrichment_to_database(enrichment_report, folder_name)
+        token = save_enrichment_to_database(enrichment_report, folder_name)
     except Exception as e:
         print(f"Error saving to database: {e}")
         import traceback
@@ -192,7 +199,19 @@ def process_enrichment_report(folder_name: str):
         traceback.print_exc()
         raise
 
-    # Step 8: Print detailed enrichment report
+    # Step 8: Write output.json to Google Drive
+    print("Writing output to Google Drive...")
+    try:
+        report_url = f"https://nfs-dq-frontend.onrender.com/enrichments/{token}"
+        write_enrichment_output_to_drive(drive, clay_file["title"], report_url)
+    except Exception as e:
+        print(f"Error writing output to Google Drive: {e}")
+        import traceback
+
+        traceback.print_exc()
+        # Don't raise here - continue with the report printing
+
+    # Step 9: Print detailed enrichment report
     print_enrichment_report(enrichment_report)
 
     print("✓ Enrichment analysis complete!")
