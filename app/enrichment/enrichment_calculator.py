@@ -149,9 +149,6 @@ class EnrichmentStatisticsCalculator:
         # Initialize stats
         stats = ColumnComparisonStatsCalculation(column_mapping_id=column_mapping.id)
 
-        # Row-by-row comparison
-        unchanged_records = 0  # Records that are exactly the same before and after
-
         for idx in df.index:
             crm_val = crm_data.iloc[idx]
             export_val = export_data.iloc[idx]
@@ -160,30 +157,54 @@ class EnrichmentStatisticsCalculator:
             export_has_value = pd.notna(export_val) and str(export_val).strip() != ""
 
             if crm_has_value and not export_has_value:
-                # CRM has value, export doesn't -> discarded invalid data
+                # CRM has value, export doesn't -> DISCARDED
                 stats.discarded_invalid_data += 1
                 modified_records.add(idx)
             elif not crm_has_value and export_has_value:
-                # CRM doesn't have value, export has -> added new data
+                # CRM doesn't have value, export has -> ADDED
                 stats.added_new_data += 1
                 modified_records.add(idx)
             elif crm_has_value and export_has_value:
                 # Both have values - check if they're the same
                 if str(crm_val).strip() == str(export_val).strip():
+                    # GOOD
                     stats.good_data += 1
-                    unchanged_records += 1  # Count as unchanged/correct
                 else:
+                    # FIXED
                     stats.fixed_data += 1
                     modified_records.add(idx)
             elif not crm_has_value and not export_has_value:
-                # Both are null/empty - count as unchanged
-                unchanged_records += 1
+                # Both are null/empty - count as good data (consistent empty data)
+                stats.not_found += 1
+
+        # Verify that the four categories add up to the total number of rows
+        total_categorized = (
+            stats.good_data
+            + stats.fixed_data
+            + stats.added_new_data
+            + stats.discarded_invalid_data
+            + stats.not_found
+        )
+        assert total_categorized == len(df), (
+            f"Column statistics don't add up to total rows. "
+            f"Total categorized: {total_categorized}, Total rows: {len(df)}, "
+            f"Column: {crm_col} -> {export_col}"
+        )
 
         # Calculate correct values and percentages
         # "Correct before" = records that are exactly the same before and after (unchanged)
-        stats.correct_values_before = unchanged_records
+        stats.correct_values_before = stats.good_data
         # "Correct after" = any non-null value in export column (as per user requirement)
-        stats.correct_values_after = int(export_data.notna().sum())
+        non_null_count = int(
+            df[export_col].apply(lambda x: pd.notna(x) and str(x).strip() != "").sum()
+        )
+        correct_count = stats.good_data + stats.fixed_data + stats.added_new_data
+        assert correct_count == non_null_count, (
+            f"Correct count doesn't match non-null count. "
+            f"Correct count: {correct_count}, Non-null count: {non_null_count}, "
+            f"Column: {crm_col} -> {export_col}"
+        )
+        stats.correct_values_after = correct_count
 
         total_rows = len(df)
         if total_rows > 0:

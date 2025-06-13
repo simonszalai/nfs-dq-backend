@@ -58,6 +58,7 @@ class ColumnComparisonStatsCalculation(BaseModel):
     added_new_data: int = 0  # CRM doesn't have value, export has value
     fixed_data: int = 0  # Both have values but different
     good_data: int = 0  # Both have values and same
+    not_found: int = 0  # Both are null/empty
 
     # Correct values (unchanged)
     correct_values_before: int = 0  # In CRM

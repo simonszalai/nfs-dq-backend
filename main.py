@@ -24,8 +24,12 @@ def run_initial_report(folder_name: str):
     """
     try:
         print(f"🔄 Processing initial report for: {folder_name}")
+        from app.initial.utils import generate_token_from_company_name
+
         process_initial_report(folder_name)
+        token = generate_token_from_company_name(folder_name)
         print(f"✅ Initial report completed for: {folder_name}")
+        print(f"🔑 Token: {token}")
         return {"folder": folder_name, "type": "initial", "status": "success"}
     except Exception as e:
         print(f"❌ Initial report failed for {folder_name}: {str(e)}")
@@ -49,8 +53,12 @@ def run_enrichment_report(folder_name: str):
     """
     try:
         print(f"🔄 Processing enrichment report for: {folder_name}")
+        from app.initial.utils import generate_token_from_company_name
+
         process_enrichment_report(folder_name)
+        token = generate_token_from_company_name(folder_name)
         print(f"✅ Enrichment report completed for: {folder_name}")
+        print(f"🔑 Token: {token}")
         return {"folder": folder_name, "type": "enrichment", "status": "success"}
     except Exception as e:
         print(f"❌ Enrichment report failed for {folder_name}: {str(e)}")
@@ -231,7 +239,9 @@ if __name__ == "__main__":
     try:
         # Example usage - you can modify these lists or make them command line arguments
         initial_overrides = []  # Add folder names here to force recalculate initial reports
-        enrichment_overrides = []  # Add folder names here to force recalculate enrichment reports
+        enrichment_overrides = [
+            "Databricks Summit 2025 – Post‑Event"
+        ]  # Add folder names here to force recalculate enrichment reports
 
         main(
             initial_override=initial_overrides,

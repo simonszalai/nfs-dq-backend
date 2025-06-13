@@ -111,6 +111,7 @@ def save_enrichment_report_to_database(
                     added_new_data=stats.added_new_data,
                     fixed_data=stats.fixed_data,
                     good_data=stats.good_data,
+                    not_found=stats.not_found,
                     correct_values_before=stats.correct_values_before,
                     correct_values_after=stats.correct_values_after,
                     correct_percentage_before=stats.correct_percentage_before,

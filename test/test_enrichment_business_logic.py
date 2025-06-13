@@ -154,15 +154,25 @@ class TestEnrichmentStatisticsCalculator:
         # Verify row-by-row comparisons
         assert stats.good_data == 1  # 'same' in both
         assert stats.fixed_data == 1  # 'different_crm' vs 'different_export'
-        assert stats.added_new_data == 1  # None -> 'added'
+        assert stats.added_new_data == 2  # None -> 'added' and '' -> 'filled'
         assert stats.discarded_invalid_data == 1  # 'removed' -> None
 
+        # Verify that all categories add up to total rows
+        total_categorized = (
+            stats.good_data
+            + stats.fixed_data
+            + stats.added_new_data
+            + stats.discarded_invalid_data
+        )
+        assert total_categorized == len(df)  # Should equal 5 rows
+
         # Verify modified records tracking
-        assert len(modified_records) == 3  # Rows 1, 2, 4 were modified
+        assert len(modified_records) == 4  # Rows 1, 2, 3, 4 were modified
         assert 0 not in modified_records  # Row 0 ('same') unchanged
         assert 1 in modified_records  # Row 1 (fixed_data)
         assert 2 in modified_records  # Row 2 (added_new_data)
         assert 3 in modified_records  # Row 3 (discarded_invalid_data)
+        assert 4 in modified_records  # Row 4 (added_new_data)
 
         # Verify correct values calculations
         assert stats.correct_values_before == 1  # Only 'same' was unchanged
@@ -266,9 +276,21 @@ class TestEnrichmentStatisticsCalculator:
         )
 
         # Both empty/whitespace and None should be treated as "no value"
-        assert stats.good_data == 1  # Only 'value' == 'value'
-        assert stats.added_new_data == 1  # None -> 'filled'
-        # Note: empty strings should be treated as no value for consistency
+        assert (
+            stats.good_data == 3
+        )  # Rows 0,1,3: empty->None, whitespace->empty, value->value
+        assert stats.added_new_data == 1  # Row 2: None -> 'filled'
+        assert stats.fixed_data == 0
+        assert stats.discarded_invalid_data == 0
+
+        # Verify all categories add up to total rows
+        total_categorized = (
+            stats.good_data
+            + stats.fixed_data
+            + stats.added_new_data
+            + stats.discarded_invalid_data
+        )
+        assert total_categorized == len(df)  # Should equal 4 rows
 
     @patch("app.enrichment.enrichment_calculator.analyze_inconsistency")
     def test_calculate_column_formats_integration(self, mock_analyze):
@@ -645,7 +667,9 @@ class TestEnrichmentStatisticsCalculator:
                 + stats.added_new_data
                 + stats.discarded_invalid_data
             )
-            assert total_categorized <= result.total_rows  # Some might be null-null
+            assert (
+                total_categorized == result.total_rows
+            )  # Must always equal total rows
 
 
 # Additional test class for edge cases and error conditions

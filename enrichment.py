@@ -49,7 +49,7 @@ def print_enrichment_report(enrichment_report):
             print(f"  Discarded invalid data: {stats.discarded_invalid_data}")
             print(f"  Added new data: {stats.added_new_data}")
             print(f"  Fixed data: {stats.fixed_data}")
-            print(f"  Good data: {stats.good_data}")
+            print(f"  \033[92mUnchanged: {stats.good_data}\033[0m")
             print(f"  Correct % before: {stats.correct_percentage_before:.1f}%")
             print(f"  Correct % after: {stats.correct_percentage_after:.1f}%")
             print(
@@ -225,18 +225,3 @@ def process_enrichment_report(folder_name: str):
     print(f"  Records modified: {enrichment_report.records_modified_count}")
     print(f"  New columns: {enrichment_report.new_columns_count}")
     print(f"  Many-to-one mappings: {enrichment_report.many_to_one_count}")
-
-
-if __name__ == "__main__":
-    try:
-        # Run function with default folder name
-        process_enrichment_report("nofluffselling")
-    except KeyboardInterrupt:
-        print("\nEnrichment analysis interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nUnexpected error: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)

@@ -77,6 +77,7 @@ class ColumnComparisonStats(SQLModel, table=True):
     added_new_data: int = 0
     fixed_data: int = 0
     good_data: int = 0
+    not_found: int = 0
 
     # Correct values
     correct_values_before: int = 0

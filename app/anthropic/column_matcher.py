@@ -300,8 +300,11 @@ IMPORTANT: You MUST use the column_matcher tool with ALL required fields:
             for error in parse_errors:
                 print(f"Warning: {error}")
 
+        # Filter mappings: exclude those with None export_column and handle many-to-one
+        filtered_mappings = self._filter_mappings(parsed_mappings)
+
         return ColumnMatchingResponse(
-            mappings=parsed_mappings,
+            mappings=filtered_mappings,
             unmapped_crm_columns=unmapped_crm_columns,
             unmapped_export_columns=unmapped_export_columns,
             notes=result.get("notes"),
@@ -352,6 +355,38 @@ IMPORTANT: You MUST use the column_matcher tool with ALL required fields:
 
         # If we get here, no tool_use content was found
         raise ValueError("No tool_use content found in AI response")
+
+    def _filter_mappings(self, mappings: List[ColumnMapping]) -> List[ColumnMapping]:
+        """Filter mappings to exclude None export columns and keep highest confidence for many-to-one.
+
+        Args:
+            mappings: List of parsed column mappings
+
+        Returns:
+            Filtered list of mappings
+        """
+        # First, exclude mappings where export_column is None
+        valid_mappings = [m for m in mappings if m.export_column is not None]
+
+        # Group by export_column to handle many-to-one mappings
+        export_column_groups = {}
+        for mapping in valid_mappings:
+            export_col = mapping.export_column
+            if export_col not in export_column_groups:
+                export_column_groups[export_col] = []
+            export_column_groups[export_col].append(mapping)
+
+        # For each export column, keep only the mapping with highest confidence
+        filtered_mappings = []
+        for export_col, group in export_column_groups.items():
+            if len(group) == 1:
+                filtered_mappings.append(group[0])
+            else:
+                # Keep the mapping with highest confidence
+                best_mapping = max(group, key=lambda m: m.confidence)
+                filtered_mappings.append(best_mapping)
+
+        return filtered_mappings
 
     def _ensure_list(self, data: Any) -> List[Any]:
         """Ensure the data is a list, handling both proper lists and JSON strings."""
